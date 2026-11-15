@@ -204,3 +204,53 @@ int run_line(char* line) {
     free(copy);
     return status;
 }
+
+// ---------- if-then-else-fi ----------
+// first_line is the line the user typed, e.g. "if grep root /etc/passwd".
+// We keep reading lines (prompt "> ") until "fi", putting the lines
+// after "then" in one list and the lines after "else" in another.
+// Then we run the condition and pick a list based on its exit status.
+void run_if(char* first_line) {
+    char* condition = first_line + 3;     // skip "if "
+    char* then_lines[MAX_BLOCK];
+    char* else_lines[MAX_BLOCK];
+    int then_count = 0, else_count = 0;
+    int part = 0;                         // 0 = before then, 1 = then-block, 2 = else-block
+    int found_fi = 0;
+    char* line;
+
+    while ((line = readline("> ")) != NULL) {
+        char* p = line;
+        while (*p == ' ' || *p == '\t') p++;   // ignore indentation
+
+        if (strcmp(p, "fi") == 0) {
+            found_fi = 1;
+            free(line);
+            break;
+        } else if (strcmp(p, "then") == 0) {
+            part = 1;
+        } else if (strcmp(p, "else") == 0) {
+            part = 2;
+        } else if (part == 1 && then_count < MAX_BLOCK) {
+            then_lines[then_count++] = strdup(p);
+        } else if (part == 2 && else_count < MAX_BLOCK) {
+            else_lines[else_count++] = strdup(p);
+        } else if (part == 0) {
+            printf("syntax error: expected 'then'\n");
+        }
+        free(line);
+    }
+
+    if (!found_fi || part == 0) {
+        printf("syntax error: if needs 'then' and 'fi'\n");
+    } else if (run_line(condition) == 0) {     // exit status 0 = success
+        for (int i = 0; i < then_count; i++)
+            run_line(then_lines[i]);
+    } else {                                   // non-zero = failure
+        for (int i = 0; i < else_count; i++)
+            run_line(else_lines[i]);
+    }
+
+    for (int i = 0; i < then_count; i++) free(then_lines[i]);
+    for (int i = 0; i < else_count; i++) free(else_lines[i]);
+}

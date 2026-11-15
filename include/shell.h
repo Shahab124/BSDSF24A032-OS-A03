@@ -18,6 +18,7 @@
 #define PROMPT "FCIT> "
 #define HISTORY_SIZE 20
 #define MAX_JOBS 50
+#define MAX_BLOCK 20
 
 // Function prototypes
 char** tokenize(char* cmdline);
@@ -26,6 +27,7 @@ void show_jobs();
 void reap_jobs();
 int run_command(char* cmd);
 int run_line(char* line);
+void run_if(char* first_line);
 int handle_builtin(char** arglist);
 void add_to_history(char* cmd);
 void show_history();

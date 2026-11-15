@@ -33,7 +33,10 @@ int main() {
             add_history(cmdline);       // readline's list (Up/Down arrows)
         }
 
-        run_line(cmdline);              // split on ';' and run each command
+        if (strncmp(cmdline, "if ", 3) == 0)
+            run_if(cmdline);            // multi-line if-then-else-fi block
+        else
+            run_line(cmdline);          // split on ';' and run each command
         free(cmdline);
     }
 
