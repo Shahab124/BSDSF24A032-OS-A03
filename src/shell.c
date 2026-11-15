@@ -156,8 +156,51 @@ int handle_builtin(char** arglist) {
         return 1;
     }
     if (strcmp(arglist[0], "jobs") == 0) {
-        printf("Job control not yet implemented.\n");
+        show_jobs();
         return 1;
     }
     return 0;
+}
+
+// Runs ONE command (no ;). Returns its exit status (0 = success).
+int run_command(char* cmd) {
+    char** arglist = tokenize(cmd);
+    if (arglist == NULL)                 // empty command
+        return 0;
+
+    // Does the command end with "&"?  e.g. "sleep 10 &"
+    int background = 0;
+    int last = 0;
+    while (arglist[last + 1] != NULL)    // find the last word
+        last++;
+    if (strcmp(arglist[last], "&") == 0) {
+        background = 1;
+        free(arglist[last]);
+        arglist[last] = NULL;            // remove "&" from the command
+    }
+
+    int status = 0;
+    if (arglist[0] == NULL)
+        fprintf(stderr, "syntax error near &\n");
+    else if (handle_builtin(arglist) == 0)   // not a built-in?
+        status = execute(arglist, background);
+
+    for (int i = 0; arglist[i] != NULL; i++) // free the words
+        free(arglist[i]);
+    free(arglist);
+    return status;
+}
+
+// Runs a whole line, which may hold several commands separated by ';'.
+// They run one after another; returns the status of the last one.
+int run_line(char* line) {
+    int status = 0;
+    char* copy = strdup(line);           // strtok changes the string, so use a copy
+    char* cmd = strtok(copy, ";");
+    while (cmd != NULL) {
+        status = run_command(cmd);       // waits for it (unless it has &)
+        cmd = strtok(NULL, ";");
+    }
+    free(copy);
+    return status;
 }

@@ -17,10 +17,15 @@
 #define MAXARGS 50
 #define PROMPT "FCIT> "
 #define HISTORY_SIZE 20
+#define MAX_JOBS 50
 
 // Function prototypes
 char** tokenize(char* cmdline);
-int execute(char** arglist);
+int execute(char** arglist, int background);
+void show_jobs();
+void reap_jobs();
+int run_command(char* cmd);
+int run_line(char* line);
 int handle_builtin(char** arglist);
 void add_to_history(char* cmd);
 void show_history();
