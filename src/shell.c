@@ -1,22 +1,53 @@
 #include "shell.h"
 
-char* read_cmd(char* prompt, FILE* fp) {
-    printf("%s", prompt);
-    char* cmdline = (char*) malloc(sizeof(char) * MAX_LEN);
-    int c, pos = 0;
+// ---------- Tab completion (readline) ----------
+char* builtins[] = {"cd", "exit", "help", "jobs", "history", NULL};
 
-    while ((c = getc(fp)) != EOF) {
-        if (c == '\n') break;
-        cmdline[pos++] = c;
+// readline calls this again and again for one Tab press.
+// state == 0 on the first call: we collect all matches then.
+// Each call returns one match; returning NULL means "no more".
+char* command_generator(const char* text, int state) {
+    static char matches[1000][256];
+    static int count, index;
+
+    if (state == 0) {
+        count = 0;
+        index = 0;
+        int len = strlen(text);
+
+        // 1) built-in names that start with text
+        for (int i = 0; builtins[i] != NULL; i++)
+            if (strncmp(builtins[i], text, len) == 0)
+                strcpy(matches[count++], builtins[i]);
+
+        // 2) program names in every PATH directory that start with text
+        char* p = getenv("PATH");
+        if (p == NULL) p = "/bin:/usr/bin";
+        char* path = strdup(p);     // strtok changes the string, so copy it
+        for (char* dir = strtok(path, ":"); dir != NULL; dir = strtok(NULL, ":")) {
+            DIR* dp = opendir(dir);
+            if (dp == NULL) continue;
+            struct dirent* entry;
+            while ((entry = readdir(dp)) != NULL && count < 1000)
+                if (strncmp(entry->d_name, text, len) == 0)
+                    snprintf(matches[count++], 256, "%s", entry->d_name);
+            closedir(dp);
+        }
+        free(path);
     }
 
-    if (c == EOF && pos == 0) {
-        free(cmdline);
-        return NULL; // Handle Ctrl+D
-    }
-    
-    cmdline[pos] = '\0';
-    return cmdline;
+    if (index < count)
+        return strdup(matches[index++]);   // readline frees this for us
+    return NULL;
+}
+
+// Called by readline when Tab is pressed.
+// start == 0 means we are on the first word -> complete command names.
+// Returning NULL makes readline use its default: filename completion.
+char** my_completion(const char* text, int start, int end) {
+    if (start == 0)
+        return rl_completion_matches(text, command_generator);
+    return NULL;
 }
 
 char** tokenize(char* cmdline) {
