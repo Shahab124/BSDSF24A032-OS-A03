@@ -9,12 +9,12 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
 #define MAX_LEN 512
-#define MAXARGS 10
-#define ARGLEN 30
+#define MAXARGS 50
 #define PROMPT "FCIT> "
 #define HISTORY_SIZE 20
 
