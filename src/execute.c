@@ -55,9 +55,57 @@ void run_child(char** arglist) {
     exit(1);
 }
 
-// Runs a command (which may contain | pipes) and waits for it.
-// Returns the command's exit status (0 = success).
-int execute(char** arglist) {
+// ---------- Background jobs ----------
+pid_t job_pids[MAX_JOBS];     // PID of each running background job
+char* job_cmds[MAX_JOBS];     // its command text (for the jobs command)
+int job_count = 0;
+
+void add_job(pid_t pid, char** arglist) {
+    if (job_count == MAX_JOBS) {
+        printf("Too many background jobs, not tracking pid %d\n", pid);
+        return;
+    }
+    char text[MAX_LEN] = "";
+    for (int i = 0; arglist[i] != NULL; i++) {   // join the words back into one string
+        strncat(text, arglist[i], MAX_LEN - strlen(text) - 2);
+        strcat(text, " ");
+    }
+    job_pids[job_count] = pid;
+    job_cmds[job_count] = strdup(text);
+    job_count++;
+    printf("[%d] %d\n", job_count, pid);
+}
+
+void show_jobs() {
+    if (job_count == 0)
+        printf("No background jobs.\n");
+    for (int i = 0; i < job_count; i++)
+        printf("[%d] %d  %s\n", i + 1, job_pids[i], job_cmds[i]);
+}
+
+// Collects ("reaps") background children that have finished, so they do
+// not stay as zombies. WNOHANG = don't block if none has finished yet.
+void reap_jobs() {
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        for (int i = 0; i < job_count; i++) {
+            if (job_pids[i] == pid) {
+                printf("[done] %d  %s\n", pid, job_cmds[i]);
+                free(job_cmds[i]);
+                job_pids[i] = job_pids[job_count - 1];   // move the last job into this slot
+                job_cmds[i] = job_cmds[job_count - 1];
+                job_count--;
+                break;
+            }
+        }
+    }
+}
+
+// Runs a command (which may contain | pipes).
+// background == 0: wait for it and return its exit status (0 = success).
+// background == 1: don't wait, remember it as a job, return 0.
+int execute(char** arglist, int background) {
     // Is there a pipe "|" in the command?
     int pipe_at = -1;
     for (int i = 0; arglist[i] != NULL; i++) {
@@ -77,6 +125,10 @@ int execute(char** arglist) {
         }
         if (pid == 0)
             run_child(arglist);            // child never returns
+        if (background) {                  // don't wait: remember it and go on
+            add_job(pid, arglist);
+            return 0;
+        }
         waitpid(pid, &status, 0);          // parent waits for the child
         return WEXITSTATUS(status);        // the child's exit code
     }
@@ -109,13 +161,19 @@ int execute(char** arglist) {
         close(fd[1]);
         // The right side may itself contain more pipes ("b | c"),
         // so we simply call execute() again on it.
-        exit(execute(arglist + pipe_at + 1));
+        exit(execute(arglist + pipe_at + 1, 0));
     }
 
     // PARENT: must close both ends, otherwise the reader never sees
     // end-of-file and waits forever.
     close(fd[0]);
     close(fd[1]);
+
+    if (background) {                      // background pipeline: track both children
+        add_job(left, arglist);
+        add_job(right, arglist);
+        return 0;
+    }
 
     int status;
     waitpid(left, NULL, 0);
