@@ -149,6 +149,7 @@ int handle_builtin(char** arglist) {
         printf("  help       show this message\n");
         printf("  jobs       list background jobs\n");
         printf("  history    show last %d commands (!n re-runs one)\n", HISTORY_SIZE);
+        printf("  set        list shell variables\n");
         return 1;
     }
     if (strcmp(arglist[0], "history") == 0) {
