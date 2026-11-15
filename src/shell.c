@@ -1,7 +1,7 @@
 #include "shell.h"
 
 // ---------- Tab completion (readline) ----------
-char* builtins[] = {"cd", "exit", "help", "jobs", "history", NULL};
+char* builtins[] = {"cd", "exit", "help", "jobs", "history", "set", NULL};
 
 // readline calls this again and again for one Tab press.
 // state == 0 on the first call: we collect all matches then.
@@ -159,7 +159,71 @@ int handle_builtin(char** arglist) {
         show_jobs();
         return 1;
     }
+    if (strcmp(arglist[0], "set") == 0) {
+        show_vars();
+        return 1;
+    }
     return 0;
+}
+
+// ---------- Shell variables (a linked list of name=value pairs) ----------
+struct var {
+    char* name;
+    char* value;
+    struct var* next;
+};
+struct var* var_list = NULL;          // first node of the list (empty at start)
+
+// Create the variable, or change its value if it already exists.
+void set_var(char* name, char* value) {
+    for (struct var* v = var_list; v != NULL; v = v->next) {
+        if (strcmp(v->name, name) == 0) {
+            free(v->value);
+            v->value = strdup(value);
+            return;
+        }
+    }
+    struct var* v = malloc(sizeof(struct var));   // new node
+    v->name = strdup(name);
+    v->value = strdup(value);
+    v->next = var_list;                // put it at the front of the list
+    var_list = v;
+}
+
+// Returns the value of a variable, or NULL if it does not exist.
+char* get_var(char* name) {
+    for (struct var* v = var_list; v != NULL; v = v->next)
+        if (strcmp(v->name, name) == 0)
+            return v->value;
+    return NULL;
+}
+
+void show_vars() {
+    for (struct var* v = var_list; v != NULL; v = v->next)
+        printf("%s=%s\n", v->name, v->value);
+}
+
+// Replaces every word starting with $ by the variable's value.
+// e.g. {"echo", "$MSG"} -> {"echo", "hello"}
+void expand_variables(char** arglist) {
+    for (int i = 0; arglist[i] != NULL; i++) {
+        if (arglist[i][0] != '$' || arglist[i][1] == '\0')
+            continue;
+        char* value = get_var(arglist[i] + 1);   // +1 skips the '$'
+        if (value == NULL)
+            value = getenv(arglist[i] + 1);      // also allow $HOME, $PATH, ...
+        if (value == NULL)
+            value = "";                          // unknown variable = empty
+        free(arglist[i]);                        // free the old "$MSG" string
+        arglist[i] = strdup(value);              // new memory for the value
+    }
+}
+
+// Is this word an assignment like NAME=value?
+// (has '=', and does not start with '=')
+int is_assignment(char* word) {
+    char* eq = strchr(word, '=');
+    return eq != NULL && eq != word;
 }
 
 // Runs ONE command (no ;). Returns its exit status (0 = success).
@@ -167,6 +231,18 @@ int run_command(char* cmd) {
     char** arglist = tokenize(cmd);
     if (arglist == NULL)                 // empty command
         return 0;
+
+    // VARNAME=value : store it, no fork needed
+    if (is_assignment(arglist[0]) && arglist[1] == NULL) {
+        char* eq = strchr(arglist[0], '=');
+        *eq = '\0';                      // split "MSG=hi" into "MSG" and "hi"
+        set_var(arglist[0], eq + 1);
+        free(arglist[0]);
+        free(arglist);
+        return 0;
+    }
+
+    expand_variables(arglist);           // $NAME -> value, before running
 
     // Does the command end with "&"?  e.g. "sleep 10 &"
     int background = 0;
