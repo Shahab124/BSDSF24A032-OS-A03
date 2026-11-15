@@ -61,6 +61,36 @@ char** tokenize(char* cmdline) {
     return arglist;
 }
 
+// ---------- Command history ----------
+char* history[HISTORY_SIZE];   // circular array: the last 20 commands
+int history_count = 0;         // total commands ever added
+
+void add_to_history(char* cmd) {
+    int slot = history_count % HISTORY_SIZE;  // wrap around when full
+    free(history[slot]);                      // drop the oldest (free(NULL) is ok)
+    history[slot] = strdup(cmd);              // store our own copy
+    history_count++;
+}
+
+// First command number still stored in the array (1-based).
+int history_first() {
+    if (history_count > HISTORY_SIZE)
+        return history_count - HISTORY_SIZE + 1;
+    return 1;
+}
+
+void show_history() {
+    for (int n = history_first(); n <= history_count; n++)
+        printf("%4d  %s\n", n, history[(n - 1) % HISTORY_SIZE]);
+}
+
+// Returns command number n, or NULL if it is not in the history.
+char* get_history(int n) {
+    if (n < history_first() || n > history_count)
+        return NULL;
+    return history[(n - 1) % HISTORY_SIZE];
+}
+
 // Runs built-in commands inside the shell process itself (no fork).
 // Returns 1 if the command was a built-in, 0 otherwise.
 int handle_builtin(char** arglist) {
@@ -81,6 +111,11 @@ int handle_builtin(char** arglist) {
         printf("  exit       quit the shell\n");
         printf("  help       show this message\n");
         printf("  jobs       list background jobs\n");
+        printf("  history    show last %d commands (!n re-runs one)\n", HISTORY_SIZE);
+        return 1;
+    }
+    if (strcmp(arglist[0], "history") == 0) {
+        show_history();
         return 1;
     }
     if (strcmp(arglist[0], "jobs") == 0) {
