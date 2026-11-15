@@ -60,3 +60,32 @@ char** tokenize(char* cmdline) {
     arglist[argnum] = NULL;
     return arglist;
 }
+
+// Runs built-in commands inside the shell process itself (no fork).
+// Returns 1 if the command was a built-in, 0 otherwise.
+int handle_builtin(char** arglist) {
+    if (strcmp(arglist[0], "exit") == 0) {
+        printf("Bye!\n");
+        exit(0);
+    }
+    if (strcmp(arglist[0], "cd") == 0) {
+        if (arglist[1] == NULL)
+            fprintf(stderr, "cd: missing directory\n");
+        else if (chdir(arglist[1]) != 0)
+            perror("cd");
+        return 1;
+    }
+    if (strcmp(arglist[0], "help") == 0) {
+        printf("Built-in commands:\n");
+        printf("  cd <dir>   change directory\n");
+        printf("  exit       quit the shell\n");
+        printf("  help       show this message\n");
+        printf("  jobs       list background jobs\n");
+        return 1;
+    }
+    if (strcmp(arglist[0], "jobs") == 0) {
+        printf("Job control not yet implemented.\n");
+        return 1;
+    }
+    return 0;
+}
