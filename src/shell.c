@@ -50,45 +50,51 @@ char** my_completion(const char* text, int start, int end) {
     return NULL;
 }
 
+// Is c one of the special one-character operators?
+int is_operator(char c) {
+    return c == '<' || c == '>' || c == '|' || c == '&';
+}
+
+// Splits a command line into words.
+//   ls -l > out.txt      ->  {"ls", "-l", ">", "out.txt", NULL}
+//   grep "a b"|wc        ->  {"grep", "a b", "|", "wc", NULL}
+// Operators < > | & always become their own word, even without spaces.
+// Text inside "double quotes" stays one word and the quotes are removed.
 char** tokenize(char* cmdline) {
-    // Edge case: empty command line
-    if (cmdline == NULL || cmdline[0] == '\0' || cmdline[0] == '\n') {
-        return NULL;
-    }
-
-    char** arglist = (char**)malloc(sizeof(char*) * (MAXARGS + 1));
-    for (int i = 0; i < MAXARGS + 1; i++) {
-        arglist[i] = (char*)malloc(sizeof(char) * ARGLEN);
-        bzero(arglist[i], ARGLEN);
-    }
-
-    char* cp = cmdline;
-    char* start;
-    int len;
+    char** arglist = malloc(sizeof(char*) * (MAXARGS + 1));
     int argnum = 0;
+    char* cp = cmdline;
 
     while (*cp != '\0' && argnum < MAXARGS) {
-        while (*cp == ' ' || *cp == '\t') cp++; // Skip leading whitespace
-        
-        if (*cp == '\0') break; // Line was only whitespace
+        while (*cp == ' ' || *cp == '\t') cp++;   // skip spaces
+        if (*cp == '\0') break;                   // end of line
 
-        start = cp;
-        len = 1;
-        while (*++cp != '\0' && !(*cp == ' ' || *cp == '\t')) {
-            len++;
+        char word[MAX_LEN];
+        int len = 0;
+
+        if (is_operator(*cp)) {                   // operator = one-letter word
+            word[len++] = *cp++;
+        } else {                                  // normal word: read until space or operator
+            while (*cp != '\0' && *cp != ' ' && *cp != '\t' && !is_operator(*cp)) {
+                if (*cp == '"') {                 // quoted part: copy everything up to the closing "
+                    cp++;
+                    while (*cp != '\0' && *cp != '"')
+                        word[len++] = *cp++;
+                    if (*cp == '"') cp++;         // skip the closing "
+                } else {
+                    word[len++] = *cp++;
+                }
+            }
         }
-        strncpy(arglist[argnum], start, len);
-        arglist[argnum][len] = '\0';
-        argnum++;
+        word[len] = '\0';
+        arglist[argnum++] = strdup(word);         // store a malloc'd copy
     }
 
-    if (argnum == 0) { // No arguments were parsed
-        for(int i = 0; i < MAXARGS + 1; i++) free(arglist[i]);
+    if (argnum == 0) {                            // empty line
         free(arglist);
         return NULL;
     }
-
-    arglist[argnum] = NULL;
+    arglist[argnum] = NULL;                       // execvp needs a NULL at the end
     return arglist;
 }
 
